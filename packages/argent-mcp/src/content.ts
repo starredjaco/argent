@@ -4,15 +4,43 @@
  * Extracted so it can be tested independently of the MCP server wiring.
  */
 
+import { readFile } from "node:fs/promises";
+
 export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; data: string; mimeType: string };
 
+interface ScreenshotDiffResult {
+  summary: string;
+  diffPath?: string;
+  contextDiffPath?: string;
+}
+
 export async function toMcpContent(result: unknown, outputHint?: string): Promise<ContentBlock[]> {
+  if (outputHint === "screenshot-diff" && isScreenshotDiffResult(result)) {
+    const blocks: ContentBlock[] = [];
+
+    if (typeof result.contextDiffPath === "string") {
+      const buf = await readFile(result.contextDiffPath);
+      blocks.push({
+        type: "image" as const,
+        data: buf.toString("base64"),
+        mimeType: "image/png" as const,
+      });
+    }
+
+    blocks.push({ type: "text" as const, text: result.summary });
+    return blocks;
+  }
+
   if (outputHint === "image" && result && typeof result === "object" && "url" in result) {
+    const filePath = (result as { path?: string }).path ?? "";
+    if ((result as { includeImageInContext?: boolean }).includeImageInContext === false) {
+      return [{ type: "text" as const, text: `Saved: ${filePath}` }];
+    }
+
     const imgRes = await fetch((result as { url: string }).url);
     const buf = Buffer.from(await imgRes.arrayBuffer());
-    const filePath = (result as { path?: string }).path ?? "";
     return [
       {
         type: "image" as const,
@@ -24,6 +52,15 @@ export async function toMcpContent(result: unknown, outputHint?: string): Promis
   }
 
   return [{ type: "text" as const, text: JSON.stringify(result, null, 2) }];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function isScreenshotDiffResult(value: unknown): value is ScreenshotDiffResult {
+  if (!isRecord(value)) return false;
+  return typeof value.summary === "string";
 }
 
 export type FlowExecuteResult = {
