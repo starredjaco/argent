@@ -2,6 +2,7 @@ import { Registry } from "@argent/registry";
 import { simulatorServerBlueprint } from "../blueprints/simulator-server";
 import { nativeDevtoolsBlueprint } from "../blueprints/native-devtools";
 import { axServiceBlueprint } from "../blueprints/ax-service";
+import { electronCdpBlueprint } from "../blueprints/electron-cdp";
 import { nativeDevtoolsStatusTool } from "../tools/native-devtools/native-devtools-status";
 import { nativeNetworkLogsTool } from "../tools/native-devtools/native-network-logs";
 import { nativeFindViewsTool } from "../tools/native-devtools/native-find-views";
@@ -78,6 +79,7 @@ export function createRegistry(): Registry {
   registry.registerBlueprint(nativeProfilerSessionBlueprint);
   registry.registerBlueprint(nativeDevtoolsBlueprint);
   registry.registerBlueprint(axServiceBlueprint);
+  registry.registerBlueprint(electronCdpBlueprint);
 
   registry.registerTool(listDevicesTool);
   registry.registerTool(createBootDeviceTool(registry));

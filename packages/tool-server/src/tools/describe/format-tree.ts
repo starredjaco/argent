@@ -162,7 +162,12 @@ export interface FormatDescribeOptions {
 }
 
 export function formatDescribeTree(root: DescribeNode, opts: FormatDescribeOptions): string {
-  const mode: "flat" | "nested" = opts.source === "uiautomator" ? "nested" : "flat";
+  // iOS providers (ax-service, native-devtools) emit a flat list under a
+  // synthetic root, so the flat renderer is correct. Sources that produce
+  // real parent/child trees (uiautomator on Android, cdp-dom on Electron)
+  // use the nested renderer so descendants beyond depth 1 are visible.
+  const mode: "flat" | "nested" =
+    opts.source === "uiautomator" || opts.source === "cdp-dom" ? "nested" : "flat";
   const header: string[] = [];
   header.push(`Source: ${opts.source}`);
   header.push(`Mode: ${mode}`);

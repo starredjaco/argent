@@ -168,8 +168,15 @@ export const simulatorServerBlueprint: ServiceBlueprint<SimulatorServerApi, Devi
       // running (e.g. a pre-booted simulator), those apps won't pick up the flag
       // until restarted — but new launches will work correctly.
       await ensureAutomationEnabled(device.id).catch(() => {});
-    } else {
+    } else if (device.platform === "android") {
       await ensureDep("adb");
+    } else {
+      // The simulator-server binary only knows iOS and Android. Other platforms
+      // (Electron) have their own blueprints (electron-cdp); reaching this
+      // factory with one means a tool's services() wired the wrong ref.
+      throw new Error(
+        `${SIMULATOR_SERVER_NAMESPACE}.factory does not support platform "${device.platform}". Use the platform-specific service blueprint instead.`
+      );
     }
 
     const { proc, apiUrl, streamUrl } = await spawnSimulatorServerProcess(

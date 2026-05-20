@@ -19,6 +19,7 @@ import {
   waitForBootCompleted,
 } from "../../utils/adb";
 import { ensureDep } from "../../utils/check-deps";
+import { bootElectronApp, type ElectronBootResult } from "./boot-electron";
 
 const execFileAsync = promisify(execFile);
 
@@ -51,6 +52,27 @@ const zodSchema = z.object({
     .describe(
       "Android-only: overall budget for the full boot sequence. Defaults to 480000 (8 min). Clamped to [30s, 15min]. Ignored on iOS."
     ),
+  electronAppPath: z
+    .string()
+    .optional()
+    .describe(
+      "Electron: path to the Electron app to launch. Either a packaged .app bundle / executable, or a project directory whose package.json points the Electron binary at the entry script. Mutually exclusive with udid/avdName."
+    ),
+  electronPort: z
+    .number()
+    .int()
+    .min(1024)
+    .max(65535)
+    .optional()
+    .describe(
+      "Electron-only: CDP remote-debugging port to expose. Defaults to a free port; the resulting device id is `electron-cdp-<port>`."
+    ),
+  electronArgs: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Electron-only: extra CLI arguments forwarded to the Electron binary after the app path."
+    ),
 });
 
 type BootDeviceParams = z.infer<typeof zodSchema>;
@@ -58,6 +80,7 @@ type BootDeviceParams = z.infer<typeof zodSchema>;
 type BootDeviceResult =
   | { platform: "ios"; udid: string; booted: true }
   | { platform: "android"; serial: string; avdName: string; booted: true }
+  | ElectronBootResult
   | NativeDevtoolsInitFailedResult;
 
 // Each stage has its own sub-budget so a hang in one stage cannot consume the
@@ -639,13 +662,15 @@ function createEarlyExitRacer(getExit: () => Error | null): {
   };
 }
 
-// boot-device dispatches internally on `udid` vs `avdName` rather than via
-// `dispatchByPlatform` (the helper assumes a single udid input). Capability
-// is still declared so the HTTP gate rejects an iOS udid on a host without
-// xcrun, etc., and so `list-devices` consumers can rely on uniform metadata.
+// boot-device dispatches internally on `udid` vs `avdName` vs `electronAppPath`
+// rather than via `dispatchByPlatform` (the helper assumes a single udid
+// input). Capability is still declared so the HTTP gate rejects an iOS udid
+// on a host without xcrun, etc., and so `list-devices` consumers can rely on
+// uniform metadata.
 const capability: ToolCapability = {
   apple: { simulator: true, device: true },
   android: { emulator: true, device: true, unknown: true },
+  electron: { app: true },
 };
 
 export function createBootDeviceTool(
@@ -653,11 +678,11 @@ export function createBootDeviceTool(
 ): ToolDefinition<BootDeviceParams, BootDeviceResult> {
   return {
     id: "boot-device",
-    description: `Start an iOS simulator or launch an Android emulator and wait until it is ready to accept interactions.
-Pick the platform by which argument you pass: 'udid' for an iOS simulator from list-devices, or 'avdName' for an Android AVD (a serial is assigned automatically).
+    description: `Start an iOS simulator, launch an Android emulator, or spawn an Electron app and wait until it is ready to accept interactions.
+Pick the platform by which argument you pass: 'udid' for an iOS simulator from list-devices, 'avdName' for an Android AVD (a serial is assigned automatically), or 'electronAppPath' for an Electron app (a CDP remote-debugging port is picked automatically, or pass 'electronPort' to fix one).
 Use at the start of a session once you have picked a target.
-Returns a tagged payload: { platform: 'ios', udid, booted } or { platform: 'android', serial, avdName, booted }.
-Android boots take 2–10 minutes depending on machine and cold/warm state; the tool transparently hot-boots from the AVD's default_boot snapshot when usable and falls back to cold boot otherwise. If any boot stage fails, the tool terminates the emulator it spawned so the next retry starts clean.`,
+Returns a tagged payload: { platform: 'ios', udid, booted } or { platform: 'android', serial, avdName, booted } or { platform: 'electron', id, port, pid, booted }.
+Android boots take 2–10 minutes depending on machine and cold/warm state; the tool transparently hot-boots from the AVD's default_boot snapshot when usable and falls back to cold boot otherwise. If any boot stage fails, the tool terminates the device it spawned so the next retry starts clean.`,
     alwaysLoad: true,
     searchHint: "boot start launch simulator emulator avd device session ios android cold hot",
     zodSchema,
@@ -666,15 +691,26 @@ Android boots take 2–10 minutes depending on machine and cold/warm state; the 
     async execute(_services, params) {
       const hasUdid = Boolean(params.udid);
       const hasAvd = Boolean(params.avdName);
-      if (hasUdid === hasAvd) {
-        throw new Error("Provide exactly one of `udid` (iOS) or `avdName` (Android).");
+      const hasElectron = Boolean(params.electronAppPath);
+      const provided = [hasUdid, hasAvd, hasElectron].filter(Boolean).length;
+      if (provided !== 1) {
+        throw new Error(
+          "Provide exactly one of `udid` (iOS), `avdName` (Android), or `electronAppPath` (Electron)."
+        );
       }
       if (hasUdid) {
         return bootIos(params.udid!, registry);
       }
-      return bootAndroid({
-        avdName: params.avdName!,
-        bootTimeoutMs: params.bootTimeoutMs ?? 480_000,
+      if (hasAvd) {
+        return bootAndroid({
+          avdName: params.avdName!,
+          bootTimeoutMs: params.bootTimeoutMs ?? 480_000,
+        });
+      }
+      return bootElectronApp({
+        appPath: params.electronAppPath!,
+        port: params.electronPort,
+        extraArgs: params.electronArgs,
       });
     },
   };

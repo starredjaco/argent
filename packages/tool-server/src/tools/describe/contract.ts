@@ -52,11 +52,12 @@ export const describeNodeSchema: z.ZodType<DescribeNode> = z.lazy(() =>
 );
 
 // Where the tree came from. "ax-service" / "native-devtools" come from iOS;
-// "uiautomator" is the Android branch's underlying provider. Agents that
-// branch on `source` (e.g. to decide whether to also call `native-find-views`
-// for a richer tree) need to distinguish the Android case from an iOS
-// native-devtools fallback — which the previous shared label hid.
-export type DescribeSource = "ax-service" | "native-devtools" | "uiautomator";
+// "uiautomator" is the Android branch's underlying provider; "cdp-dom" is the
+// Electron branch's DOM walk over Chrome DevTools Protocol. Agents that branch
+// on `source` (e.g. to decide whether to also call `native-find-views` for a
+// richer tree) need to distinguish each provider — which the previous shared
+// label hid.
+export type DescribeSource = "ax-service" | "native-devtools" | "uiautomator" | "cdp-dom";
 
 // Internal shape produced by the per-platform adapters. The `tree` is consumed
 // by the formatter in `format-tree.ts` and then dropped before the tool replies
