@@ -46,7 +46,7 @@ describe("toMcpContent", () => {
     vi.unstubAllGlobals();
   });
 
-  it("returns text only and does not fetch when image context is disabled", async () => {
+  it("returns text only and does not fetch when args.includeImageInContext is false", async () => {
     const mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
 
@@ -54,13 +54,34 @@ describe("toMcpContent", () => {
       {
         url: "http://localhost/img.png",
         path: "/tmp/img.png",
-        includeImageInContext: false,
       },
-      "image"
+      "image",
+      { udid: "ABC", includeImageInContext: false }
     );
 
     expect(mockFetch).not.toHaveBeenCalled();
     expect(result).toEqual([{ type: "text", text: "Saved: /tmp/img.png" }]);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("attaches the image when args.includeImageInContext is undefined or true", async () => {
+    const pngBytes = new Uint8Array([0x89]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        arrayBuffer: async () => pngBytes.buffer,
+      })
+    );
+
+    const result = await toMcpContent(
+      { url: "http://localhost/img.png", path: "/tmp/img.png" },
+      "image",
+      { udid: "ABC" }
+    );
+
+    expect(result[0]?.type).toBe("image");
+    expect(result[1]).toEqual({ type: "text", text: "Saved: /tmp/img.png" });
 
     vi.unstubAllGlobals();
   });
@@ -357,6 +378,32 @@ describe("flowRunToMcpContent", () => {
       mimeType: "image/png",
     });
     expect(blocks[3]).toEqual({ type: "text", text: "Saved: /tmp/s.png" });
+
+    vi.unstubAllGlobals();
+  });
+
+  it("suppresses image attach when step.args.includeImageInContext is false", async () => {
+    const mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
+
+    const input: FlowExecuteResult = {
+      flow: "f",
+      steps: [
+        {
+          kind: "tool",
+          tool: "screenshot",
+          result: { url: "http://localhost/img.png", path: "/tmp/s.png" },
+          outputHint: "image",
+          args: { udid: "ABC", includeImageInContext: false, scale: 1.0 },
+        },
+      ],
+    };
+    const blocks = await flowRunToMcpContent(input);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    // [0] header, [1] "screenshot", [2] "Saved: ...", [3] footer
+    expect(blocks[1]).toEqual({ type: "text", text: "[1] screenshot" });
+    expect(blocks[2]).toEqual({ type: "text", text: "Saved: /tmp/s.png" });
 
     vi.unstubAllGlobals();
   });
