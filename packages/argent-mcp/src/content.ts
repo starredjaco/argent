@@ -10,33 +10,11 @@ export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; data: string; mimeType: string };
 
-interface ScreenshotDiffResult {
-  summary: string;
-  diffPath?: string;
-  contextDiffPath?: string;
-}
-
 export async function toMcpContent(
   result: unknown,
   outputHint?: string,
   args?: unknown
 ): Promise<ContentBlock[]> {
-  if (outputHint === "screenshot-diff" && isScreenshotDiffResult(result)) {
-    const blocks: ContentBlock[] = [];
-
-    if (typeof result.contextDiffPath === "string") {
-      const buf = await readFile(result.contextDiffPath);
-      blocks.push({
-        type: "image" as const,
-        data: buf.toString("base64"),
-        mimeType: "image/png" as const,
-      });
-    }
-
-    blocks.push({ type: "text" as const, text: result.summary });
-    return blocks;
-  }
-
   if (outputHint === "image" && result && typeof result === "object" && "url" in result) {
     const filePath = (result as { path?: string }).path ?? "";
     if (isRecord(args) && args.includeImageInContext === false) {
@@ -62,10 +40,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
 
-function isScreenshotDiffResult(value: unknown): value is ScreenshotDiffResult {
+// ── screenshot-diff adapter ──────────────────────────────────────────
+
+export interface ScreenshotDiffResult {
+  summary: string;
+  diffPath?: string;
+  contextDiffPath?: string;
+}
+
+export function isScreenshotDiffResult(value: unknown): value is ScreenshotDiffResult {
   if (!isRecord(value)) return false;
   return typeof value.summary === "string";
 }
+
+// Render a screenshot-diff tool result as MCP content blocks.
+export async function screenshotDiffToMcpContent(
+  result: ScreenshotDiffResult
+): Promise<ContentBlock[]> {
+  const blocks: ContentBlock[] = [];
+
+  if (typeof result.contextDiffPath === "string") {
+    const buf = await readFile(result.contextDiffPath);
+    blocks.push({
+      type: "image" as const,
+      data: buf.toString("base64"),
+      mimeType: "image/png" as const,
+    });
+  }
+
+  blocks.push({ type: "text" as const, text: result.summary });
+  return blocks;
+}
+
+// ── flow-execute adapter ─────────────────────────────────────────────
 
 export type FlowExecuteResult = {
   flow: string;
