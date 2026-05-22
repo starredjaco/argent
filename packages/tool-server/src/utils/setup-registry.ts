@@ -3,6 +3,7 @@ import { simulatorServerBlueprint } from "../blueprints/simulator-server";
 import { nativeDevtoolsBlueprint } from "../blueprints/native-devtools";
 import { axServiceBlueprint } from "../blueprints/ax-service";
 import { electronCdpBlueprint } from "../blueprints/electron-cdp";
+import { electronJsRuntimeDebuggerBlueprint } from "../blueprints/electron-js-runtime-debugger";
 import { nativeDevtoolsStatusTool } from "../tools/native-devtools/native-devtools-status";
 import { nativeNetworkLogsTool } from "../tools/native-devtools/native-network-logs";
 import { nativeFindViewsTool } from "../tools/native-devtools/native-find-views";
@@ -80,6 +81,7 @@ export function createRegistry(): Registry {
   registry.registerBlueprint(nativeDevtoolsBlueprint);
   registry.registerBlueprint(axServiceBlueprint);
   registry.registerBlueprint(electronCdpBlueprint);
+  registry.registerBlueprint(electronJsRuntimeDebuggerBlueprint);
 
   registry.registerTool(listDevicesTool);
   registry.registerTool(createBootDeviceTool(registry));
