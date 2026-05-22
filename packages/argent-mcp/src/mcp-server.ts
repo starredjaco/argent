@@ -212,11 +212,7 @@ export async function startMcpServer(options: StartMcpServerOptions): Promise<vo
 
         try {
           const screenshotResult = await callTool("screenshot", { udid });
-          const screenshotContent = await toMcpContent(
-            screenshotResult.result,
-            "image",
-            { udid }
-          );
+          const screenshotContent = await toMcpContent(screenshotResult.result, "image", { udid });
           content = [
             ...content,
             {
